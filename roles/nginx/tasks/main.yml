@@ -1,5 +1,5 @@
 # Nginx Role - Main Tasks
-# Installs and configures Nginx for Laravel/PHP applications
+# Installs and configures Nginx web server
 
 - name: Install Nginx
   apt:
@@ -37,13 +37,16 @@
   become: true
   notify: Reload Nginx
 
+# Deploy site config only when project_name is defined (called from deploy playbook)
 - name: Deploy Laravel Nginx configuration (HTTP only)
   template:
     src: "laravel.conf.j2"
     dest: "/etc/nginx/sites-available/{{ project_name }}.conf"
     mode: "0644"
   become: true
-  when: not use_ssl | default(false)
+  when: 
+    - project_name is defined
+    - not use_ssl | default(false)
   notify: Reload Nginx
 
 - name: Deploy Laravel Nginx configuration (with SSL)
@@ -52,7 +55,9 @@
     dest: "/etc/nginx/sites-available/{{ project_name }}.conf"
     mode: "0644"
   become: true
-  when: use_ssl | default(false)
+  when: 
+    - project_name is defined
+    - use_ssl | default(false)
   notify: Reload Nginx
 
 - name: Enable site configuration
@@ -61,6 +66,7 @@
     dest: "/etc/nginx/sites-enabled/{{ project_name }}.conf"
     state: link
   become: true
+  when: project_name is defined
   notify: Reload Nginx
 
 - name: Test Nginx configuration

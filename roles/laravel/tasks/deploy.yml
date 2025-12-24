@@ -138,12 +138,6 @@
     state: restarted
   become: true
 
-- name: Reload Nginx
-  systemd:
-    name: nginx
-    state: reloaded
-  become: true
-
 - name: Disable maintenance mode
   command: php artisan up
   args:
@@ -151,3 +145,4 @@
   become: true
   become_user: "{{ deploy_user | default('www-data') }}"
   when: enable_maintenance_mode | default(true)
+

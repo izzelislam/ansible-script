@@ -1,0 +1,14 @@
+# Default variables for Common role
+
+# System
+timezone: "Asia/Jakarta"
+upgrade_packages: true
+
+# Deploy user
+create_deploy_user: true
+deploy_user: "deploy"
+copy_ssh_key: true
+
+# Firewall
+allow_http: true
+allow_https: true

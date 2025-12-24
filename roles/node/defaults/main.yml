@@ -1,0 +1,9 @@
+# Default variables for Node.js role
+
+# Node.js major version (18, 20, 21, etc)
+node_version: "20"
+
+# Global npm packages to install
+# npm_global_packages:
+#   - pm2
+#   - yarn

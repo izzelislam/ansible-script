@@ -1,0 +1,65 @@
+# MySQL/MariaDB Installation Role
+# Installs and configures MySQL or MariaDB server
+
+- name: Install MySQL/MariaDB server
+  apt:
+    name:
+      - mariadb-server
+      - mariadb-client
+      - python3-pymysql
+    state: present
+    update_cache: yes
+  become: true
+
+- name: Start and enable MariaDB
+  systemd:
+    name: mariadb
+    state: started
+    enabled: true
+  become: true
+
+- name: Set root password
+  mysql_user:
+    name: root
+    password: "{{ mysql_root_password | default('root') }}"
+    login_unix_socket: /var/run/mysqld/mysqld.sock
+    host_all: true
+    state: present
+  become: true
+  no_log: true
+  when: mysql_root_password is defined
+
+- name: Remove anonymous users
+  mysql_user:
+    name: ''
+    host_all: true
+    state: absent
+    login_unix_socket: /var/run/mysqld/mysqld.sock
+  become: true
+
+- name: Remove test database
+  mysql_db:
+    name: test
+    state: absent
+    login_unix_socket: /var/run/mysqld/mysqld.sock
+  become: true
+
+- name: Create application database
+  mysql_db:
+    name: "{{ mysql_database }}"
+    state: present
+    login_unix_socket: /var/run/mysqld/mysqld.sock
+  become: true
+  when: mysql_database is defined
+
+- name: Create application database user
+  mysql_user:
+    name: "{{ mysql_user }}"
+    password: "{{ mysql_password }}"
+    priv: "{{ mysql_database }}.*:ALL"
+    state: present
+    login_unix_socket: /var/run/mysqld/mysqld.sock
+    host: "{{ mysql_user_host | default('localhost') }}"
+  become: true
+  no_log: true
+  when: mysql_user is defined and mysql_password is defined and mysql_database is defined

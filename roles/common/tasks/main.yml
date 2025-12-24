@@ -1,53 +1,126 @@
-- name: Update system
+# Common Role - Basic Server Setup
+# Installs essential packages and configures basic security
+
+- name: Update apt cache
   apt:
     update_cache: yes
-    upgrade: dist
+    cache_valid_time: 3600
+  become: true
 
-- name: Install basic packages
+- name: Upgrade all packages
+  apt:
+    upgrade: dist
+  become: true
+  when: upgrade_packages | default(true)
+
+- name: Install essential packages
   apt:
     name:
       - git
       - curl
+      - wget
       - unzip
-      - ufw
+      - zip
       - htop
+      - vim
+      - nano
+      - ufw
+      - fail2ban
+      - acl
+      - software-properties-common
+      - apt-transport-https
+      - ca-certificates
+      - gnupg
+      - lsb-release
     state: present
+  become: true
 
-- name: Create user dev
+- name: Set timezone
+  timezone:
+    name: "{{ timezone | default('Asia/Jakarta') }}"
+  become: true
+
+- name: Create deploy user
   user:
-    name: dev
+    name: "{{ deploy_user | default('deploy') }}"
     shell: /bin/bash
     groups: sudo
     append: yes
     create_home: true
+  become: true
+  when: create_deploy_user | default(true)
 
-- name: Create .ssh directory for dev
+- name: Create .ssh directory for deploy user
   file:
-    path: /home/dev/.ssh
+    path: "/home/{{ deploy_user | default('deploy') }}/.ssh"
     state: directory
-    owner: dev
-    group: dev
-    mode: 0700
+    owner: "{{ deploy_user | default('deploy') }}"
+    group: "{{ deploy_user | default('deploy') }}"
+    mode: '0700'
+  become: true
+  when: create_deploy_user | default(true)
 
-- name: Copy SSH public key to dev
+- name: Copy SSH public key to deploy user
   authorized_key:
-    user: dev
+    user: "{{ deploy_user | default('deploy') }}"
     state: present
-    key: "{{ lookup('file', lookup('env','HOME') + '/.ssh/id_rsa.pub') }}"
+    key: "{{ lookup('file', ssh_public_key_path | default(lookup('env','HOME') + '/.ssh/id_rsa.pub')) }}"
+  become: true
+  when: create_deploy_user | default(true) and copy_ssh_key | default(true)
+  ignore_errors: true
 
-- name: Allow OpenSSH
+- name: Allow deploy user sudo without password
+  copy:
+    dest: "/etc/sudoers.d/{{ deploy_user | default('deploy') }}"
+    content: "{{ deploy_user | default('deploy') }} ALL=(ALL) NOPASSWD:ALL\n"
+    owner: root
+    group: root
+    mode: '0440'
+  become: true
+  when: create_deploy_user | default(true)
+
+# UFW Firewall Configuration
+- name: Allow SSH through UFW
   ufw:
     rule: allow
     name: OpenSSH
+  become: true
+
+- name: Allow HTTP through UFW
+  ufw:
+    rule: allow
+    port: '80'
+    proto: tcp
+  become: true
+  when: allow_http | default(true)
+
+- name: Allow HTTPS through UFW
+  ufw:
+    rule: allow
+    port: '443'
+    proto: tcp
+  become: true
+  when: allow_https | default(true)
 
 - name: Enable UFW
   ufw:
     state: enabled
+    policy: deny
+  become: true
 
-- name: Allow dev sudo without password
-  copy:
-    dest: /etc/sudoers.d/dev
-    content: "dev ALL=(ALL) NOPASSWD:ALL\n"
-    owner: root
-    group: root
-    mode: 0440
+# Fail2ban Configuration
+- name: Start and enable Fail2ban
+  systemd:
+    name: fail2ban
+    state: started
+    enabled: true
+  become: true
+
+- name: Create web directory
+  file:
+    path: /var/www
+    state: directory
+    owner: www-data
+    group: www-data
+    mode: '0755'
+  become: true

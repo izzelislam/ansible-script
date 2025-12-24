@@ -1,4 +1,101 @@
-- hosts: all
+# Bootstrap Playbook - Complete Server Setup
+# Sets up all requirements: Common, MySQL, Nginx, PHP, Composer, Node.js
+#
+# Usage:
+#   Full setup:    ansible-playbook playbooks/bootstrap.yml
+#   Skip MySQL:    ansible-playbook playbooks/bootstrap.yml --skip-tags mysql
+#   Only PHP:      ansible-playbook playbooks/bootstrap.yml --tags php
+#   Skip upgrade:  ansible-playbook playbooks/bootstrap.yml -e "upgrade_packages=false"
+
+- name: Bootstrap Server - Complete Setup
+  hosts: cokelatos
   become: true
+
+  vars:
+    # System Configuration
+    timezone: "Asia/Jakarta"
+    upgrade_packages: true
+    
+    # Deploy User
+    deploy_user: "cokelatos"
+    create_deploy_user: false  # User sudah ada
+    
+    # PHP Configuration
+    php_version: "8.3"
+    
+    # Node.js Configuration
+    node_version: "20"
+    npm_global_packages:
+      - pm2
+    
+    # MySQL Configuration (optional - set to create app db)
+    # mysql_root_password: "your_secure_root_password"
+    # mysql_database: "your_app_db"
+    # mysql_user: "your_app_user"
+    # mysql_password: "your_app_password"
+    
+    # Firewall
+    allow_http: true
+    allow_https: true
+
+  pre_tasks:
+    - name: Display bootstrap info
+      debug:
+        msg: |
+          🚀 Starting Server Bootstrap
+          ============================
+          Host: {{ inventory_hostname }}
+          Timezone: {{ timezone }}
+          PHP Version: {{ php_version }}
+          Node.js Version: {{ node_version }}
+          ============================
+
   roles:
-    - common
+    - role: common
+      tags: [common, base]
+    
+    - role: mysql
+      tags: [mysql, database]
+    
+    - role: nginx
+      tags: [nginx, webserver]
+    
+    - role: php
+      tags: [php]
+    
+    - role: composer
+      tags: [composer, php]
+    
+    - role: node
+      tags: [node, nodejs]
+
+  post_tasks:
+    - name: Get installed versions
+      shell: |
+        echo "PHP: $(php -v | head -n1)"
+        echo "Composer: $(composer --version 2>/dev/null || echo 'Not installed')"
+        echo "Node: $(node --version 2>/dev/null || echo 'Not installed')"
+        echo "npm: $(npm --version 2>/dev/null || echo 'Not installed')"
+        echo "MySQL: $(mysql --version 2>/dev/null || echo 'Not installed')"
+        echo "Nginx: $(nginx -v 2>&1 || echo 'Not installed')"
+      register: versions
+      changed_when: false
+
+    - name: Display completion info
+      debug:
+        msg: |
+          ✅ Bootstrap Complete!
+          ======================
+          
+          📦 Installed Software:
+          {{ versions.stdout }}
+          
+          📝 Next Steps:
+          1. Configure your application
+          2. Run: ansible-playbook playbooks/deploy-laravel.yml -e "first_install=true"
+          
+          🔒 Security:
+          - UFW Firewall: Enabled (SSH, HTTP, HTTPS allowed)
+          - Fail2ban: Active
+          
+          👤 Deploy User: {{ deploy_user | default('deploy') }}

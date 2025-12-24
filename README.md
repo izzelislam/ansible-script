@@ -63,9 +63,9 @@ ansible-playbook playbooks/deploy-laravel.yml -e "first_install=true"
 ansible-playbook playbooks/deploy-laravel.yml
 ```
 
-**Deploy dengan SSL:**
+**Deploy dengan seeders:**
 ```bash
-ansible-playbook playbooks/deploy-laravel.yml -e "use_ssl=true"
+ansible-playbook playbooks/deploy-laravel.yml -e "run_seeders=true"
 ```
 
 ## 📋 Variables yang Tersedia
@@ -141,16 +141,16 @@ ansible-playbook playbooks/deploy-laravel.yml \
 ansible-playbook playbooks/deploy-laravel.yml --tags laravel
 ```
 
-### Hanya Setup PHP
+### Setup PHP (gunakan playbook terpisah)
 
 ```bash
-ansible-playbook playbooks/deploy-laravel.yml --tags php
+ansible-playbook playbooks/php.yml
 ```
 
-### Hanya Setup Nginx
+### Setup Nginx (gunakan playbook terpisah)
 
 ```bash
-ansible-playbook playbooks/deploy-laravel.yml --tags nginx
+ansible-playbook playbooks/webserver.yml
 ```
 
 ### Dengan Password Database dari Vault
@@ -173,7 +173,7 @@ ansible-playbook playbooks/deploy-laravel.yml --ask-vault-pass
 6. **Clear Cache** - Bersihkan semua cache Laravel
 7. **Optimize Cache** - Cache config, routes, views
 8. **Fix Permissions** - Set permissions storage & bootstrap/cache
-9. **Restart Services** - Restart PHP-FPM & Nginx
+9. **Restart PHP-FPM** - Restart PHP-FPM service
 10. **Maintenance Mode OFF** - Laravel aktif kembali
 
 ## ⚠️ Troubleshooting
