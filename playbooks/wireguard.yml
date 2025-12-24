@@ -1,0 +1,139 @@
+- name: Full Auto Setup WireGuard VPN (Ubuntu 24.04)
+  hosts: vpn
+  become: true
+  vars:
+    wg_interface: wg0
+    wg_port: 51820
+    wg_network: 10.8.0.0/24
+    wg_server_ip: 10.8.0.1/24
+    wg_client_ip: 10.8.0.2/32
+    public_interface: eth0
+    client_name: client1
+
+  tasks:
+
+    - name: Update system
+      apt:
+        update_cache: yes
+        upgrade: yes
+
+    - name: Install required packages
+      apt:
+        name:
+          - wireguard
+          - nftables
+          - qrencode
+        state: present
+
+    - name: Enable nftables
+      systemd:
+        name: nftables
+        enabled: true
+        state: started
+
+    - name: Enable IP Forwarding
+      copy:
+        dest: /etc/sysctl.d/99-wireguard.conf
+        content: |
+          net.ipv4.ip_forward=1
+      notify: Apply sysctl
+
+    - name: Create WireGuard directory
+      file:
+        path: /etc/wireguard
+        state: directory
+        mode: 0700
+
+    - name: Generate SERVER private key
+      shell: wg genkey > /etc/wireguard/server_private.key
+      args:
+        creates: /etc/wireguard/server_private.key
+
+    - name: Generate SERVER public key
+      shell: cat /etc/wireguard/server_private.key | wg pubkey > /etc/wireguard/server_public.key
+      args:
+        creates: /etc/wireguard/server_public.key
+
+    - name: Generate CLIENT private key
+      shell: wg genkey > /etc/wireguard/{{ client_name }}_private.key
+      args:
+        creates: /etc/wireguard/{{ client_name }}_private.key
+
+    - name: Generate CLIENT public key
+      shell: cat /etc/wireguard/{{ client_name }}_private.key | wg pubkey > /etc/wireguard/{{ client_name }}_public.key
+      args:
+        creates: /etc/wireguard/{{ client_name }}_public.key
+
+    - name: Read SERVER private key
+      slurp:
+        src: /etc/wireguard/server_private.key
+      register: server_private
+
+    - name: Read SERVER public key
+      slurp:
+        src: /etc/wireguard/server_public.key
+      register: server_public
+
+    - name: Read CLIENT public key
+      slurp:
+        src: /etc/wireguard/{{ client_name }}_public.key
+      register: client_public
+
+    - name: Create WireGuard server config wg0.conf
+      copy:
+        dest: /etc/wireguard/{{ wg_interface }}.conf
+        mode: 0600
+        content: |
+          [Interface]
+          Address = {{ wg_server_ip }}
+          ListenPort = {{ wg_port }}
+          PrivateKey = {{ server_private.content | b64decode | trim }}
+          SaveConfig = false
+
+          [Peer]
+          PublicKey = {{ client_public.content | b64decode | trim }}
+          AllowedIPs = {{ wg_client_ip }}
+
+    - name: Add nftables NAT rules
+      shell: |
+        nft add table ip nat || true
+        nft add chain ip nat POSTROUTING { type nat hook postrouting priority 100 \; } || true
+        nft add rule ip nat POSTROUTING oifname "{{ public_interface }}" masquerade || true
+
+    - name: Add nftables forward rules
+      shell: |
+        nft add table ip filter || true
+        nft add chain ip filter FORWARD { type filter hook forward priority 0 \; policy accept \; } || true
+
+    - name: Enable and start WireGuard
+      systemd:
+        name: wg-quick@{{ wg_interface }}
+        enabled: true
+        state: restarted
+
+    - name: Read CLIENT private key
+      slurp:
+        src: /etc/wireguard/{{ client_name }}_private.key
+      register: client_private
+
+    - name: Show CLIENT CONFIG for Mac (FINAL OUTPUT)
+      debug:
+        msg: |
+          ==============================
+          SAVE AS: {{ client_name }}.conf
+          ==============================
+
+          [Interface]
+          PrivateKey = {{ client_private.content | b64decode | trim }}
+          Address = {{ wg_client_ip }}
+          DNS = 1.1.1.1, 8.8.8.8
+
+          [Peer]
+          PublicKey = {{ server_public.content | b64decode | trim }}
+          Endpoint = {{ ansible_host }}:{{ wg_port }}
+          AllowedIPs = 0.0.0.0/0, ::/0
+          PersistentKeepalive = 25
+
+  handlers:
+    - name: Apply sysctl
+      command: sysctl --system

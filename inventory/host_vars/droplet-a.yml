@@ -1,0 +1,4 @@
+stack: laravel
+app_root: /var/www/laravel
+domain: laravel.example.com
+repo_url: git@github.com:user/laravel12.git

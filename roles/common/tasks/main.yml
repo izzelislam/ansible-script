@@ -1,0 +1,53 @@
+- name: Update system
+  apt:
+    update_cache: yes
+    upgrade: dist
+
+- name: Install basic packages
+  apt:
+    name:
+      - git
+      - curl
+      - unzip
+      - ufw
+      - htop
+    state: present
+
+- name: Create user dev
+  user:
+    name: dev
+    shell: /bin/bash
+    groups: sudo
+    append: yes
+    create_home: true
+
+- name: Create .ssh directory for dev
+  file:
+    path: /home/dev/.ssh
+    state: directory
+    owner: dev
+    group: dev
+    mode: 0700
+
+- name: Copy SSH public key to dev
+  authorized_key:
+    user: dev
+    state: present
+    key: "{{ lookup('file', lookup('env','HOME') + '/.ssh/id_rsa.pub') }}"
+
+- name: Allow OpenSSH
+  ufw:
+    rule: allow
+    name: OpenSSH
+
+- name: Enable UFW
+  ufw:
+    state: enabled
+
+- name: Allow dev sudo without password
+  copy:
+    dest: /etc/sudoers.d/dev
+    content: "dev ALL=(ALL) NOPASSWD:ALL\n"
+    owner: root
+    group: root
+    mode: 0440

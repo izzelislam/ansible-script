@@ -1,0 +1,43 @@
+- name: Pull latest update
+  git:
+    repo: "{{ repo_url }}"
+    dest: "/var/www/{{ project_name }}"
+    version: main
+    force: yes
+  become: true
+
+- name: Push ENV file
+  template:
+    src: ".env.j2"
+    dest: "/var/www/{{ project_name }}/.env"
+  become: true
+
+- name: Install composer update
+  composer:
+    command: install
+    working_dir: "/var/www/{{ project_name }}"
+    no_dev: true
+    optimize_autoloader: true
+  become: true
+
+- name: Migrate database
+  command: php artisan migrate --force
+  args:
+    chdir: "/var/www/{{ project_name }}"
+  become: true
+
+- name: Set permissions
+  file:
+    path: "/var/www/{{ project_name }}/storage"
+    state: directory
+    recurse: true
+    owner: www-data
+    group: www-data
+    mode: "0775"
+  become: true
+
+- name: Reload nginx
+  service:
+    name: nginx
+    state: reloaded
+  become: true

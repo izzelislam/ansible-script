@@ -1,0 +1,33 @@
+- name: Ensure directory exists
+  file:
+    path: "/var/www/{{ project_name }}"
+    state: directory
+    owner: bengbeng
+    group: www-data
+    mode: "0755"
+  become: true
+
+- name: Clone repository
+  git:
+    repo: "{{ repo_url }}"
+    dest: "/var/www/{{ project_name }}"
+    version: main
+  become: true
+
+- name: Install composer dependencies
+  composer:
+    command: install
+    working_dir: "/var/www/{{ project_name }}"
+    no_dev: true
+    optimize_autoloader: true
+  become: true
+
+- name: Generate Laravel key
+  command: php artisan key:generate --force
+  args:
+    chdir: "/var/www/{{ project_name }}"
+  register: genkey
+  become: true
+
+- set_fact:
+    app_key: "{{ genkey.stdout | regex_search('base64:.*') }}"

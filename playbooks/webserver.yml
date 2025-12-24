@@ -1,0 +1,4 @@
+- hosts: laravel:cokelatos
+  become: true
+  roles:
+    - nginx

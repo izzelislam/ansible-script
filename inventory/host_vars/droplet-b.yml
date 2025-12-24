@@ -1,0 +1,4 @@
+stack: ci4
+app_root: /var/www/ci4
+domain: ci4.example.com
+repo_url: git@github.com:user/ci4.git

@@ -1,0 +1,4 @@
+- hosts: cokelatos
+  become: true
+  roles:
+    - php

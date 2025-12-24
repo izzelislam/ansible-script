@@ -1,0 +1,48 @@
+server {
+    listen 80;
+    listen [::]:80;
+
+    server_name {{ domain }};
+    return 302 https://$server_name$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+
+    client_max_body_size 100M;
+
+    server_name {{ domain }};
+    root /var/www/{{ project_name }}/public;
+
+    ssl_certificate /etc/ssl/certs/bengbeng_crt.pem;
+    ssl_certificate_key /etc/ssl/private/bengbeng_key.pem;
+    ssl_client_certificate /etc/ssl/cloudflare.crt;
+    ssl_verify_client optional;
+
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
+
+    index index.php index.html;
+
+    location / {
+        try_files $uri $uri/ /index.php?$query_string;
+    }
+
+    location = /sitemap.xml { allow all; access_log off; }
+    location = /robots.txt { allow all; access_log off; }
+    location = /favicon.ico { log_not_found off; access_log off; }
+
+    location ~ \.php$ {
+        fastcgi_pass unix:/var/run/php/php8.3-fpm.sock;
+        fastcgi_index index.php;
+        fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;
+        include fastcgi_params;
+    }
+
+    location ~ /\.(?!well-known).* {
+        deny all;
+    }
+}

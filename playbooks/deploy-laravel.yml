@@ -1,0 +1,14 @@
+- hosts: prodVps
+  become: true
+  vars:
+    domain: "sinaucode.dev"
+    project_name: "sinaucodeV2"
+    repo_url: "git@github.com:username/repo.git"
+
+    db_name: "sinaucodedb"
+    db_user: "newadmin"
+    db_pass: "secretStrongP@ssw0rd!"
+
+  roles:
+    - laravel
+    - nginx
