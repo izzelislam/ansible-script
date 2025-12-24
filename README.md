@@ -66,6 +66,59 @@ ansible-playbook playbooks/deploy-laravel.yml -e "first_install=true"
 ansible-playbook playbooks/deploy-laravel.yml
 ```
 
+### 4. Deploy ke Host Tertentu
+
+Jika Anda memiliki banyak host dan hanya ingin deploy ke host tertentu, gunakan flag `--limit` atau `-l`:
+
+```bash
+# Deploy ke satu host tertentu
+ansible-playbook playbooks/bootstrap.yml --limit server1
+
+# Deploy ke host tertentu dengan shorthand -l
+ansible-playbook playbooks/deploy-laravel.yml -l cokelatos
+
+# Deploy ke beberapa host (dipisah koma)
+ansible-playbook playbooks/bootstrap.yml --limit "server1,server2"
+
+# Deploy ke group tertentu
+ansible-playbook playbooks/bootstrap.yml --limit webserver
+
+# Deploy ke semua host KECUALI host tertentu
+ansible-playbook playbooks/bootstrap.yml --limit 'all:!server1'
+
+# Kombinasi: group webserver kecuali server2
+ansible-playbook playbooks/bootstrap.yml --limit 'webserver:!server2'
+```
+
+#### Contoh Inventory dengan Multiple Hosts:
+
+```ini
+# inventory/hosts
+[webserver]
+prod-1 ansible_host=192.168.1.10
+prod-2 ansible_host=192.168.1.11
+
+[staging]
+staging-1 ansible_host=192.168.1.20
+
+[all:vars]
+ansible_user=ubuntu
+ansible_ssh_private_key_file=~/.ssh/id_rsa
+```
+
+#### Contoh Penggunaan:
+
+```bash
+# Bootstrap hanya server staging
+ansible-playbook playbooks/bootstrap.yml -l staging-1
+
+# Deploy Laravel ke semua server production
+ansible-playbook playbooks/deploy-laravel.yml -l webserver
+
+# Bootstrap semua kecuali staging
+ansible-playbook playbooks/bootstrap.yml --limit 'all:!staging'
+```
+
 ---
 
 ## 📦 Bootstrap Playbook
