@@ -1,6 +1,6 @@
-# Ansible Laravel Deployment
+# Ansible Multi-Purpose Deployment
 
-Ansible playbook dan roles untuk deploy aplikasi Laravel ke server VPS.
+Ansible playbook dan roles untuk setup server dan deploy aplikasi (Laravel, Express, dll).
 
 ## 📁 Struktur Project
 
@@ -13,15 +13,19 @@ ansible/
 ├── group_vars/
 │   └── all.yml                 # Variables global
 ├── playbooks/
-│   ├── deploy-laravel.yml      # Playbook untuk deploy Laravel
+│   ├── bootstrap.yml           # 🚀 Setup lengkap server (MySQL, Nginx, PHP, Node.js, Composer)
+│   ├── deploy-laravel.yml      # Deploy aplikasi Laravel
 │   ├── php.yml                 # Setup PHP saja
-│   ├── webserver.yml           # Setup Nginx saja
-│   └── bootstrap.yml           # Setup awal server
+│   └── webserver.yml           # Setup Nginx saja
 ├── roles/
-│   ├── common/                 # Setup dasar server
-│   ├── php/                    # Instalasi PHP + extensions
+│   ├── common/                 # Setup dasar server + security
+│   ├── mysql/                  # Instalasi MySQL/MariaDB
 │   ├── nginx/                  # Instalasi & konfigurasi Nginx
-│   └── laravel/                # Deploy aplikasi Laravel
+│   ├── php/                    # Instalasi PHP + extensions
+│   ├── composer/               # Instalasi Composer
+│   ├── node/                   # Instalasi Node.js + npm
+│   ├── laravel/                # Deploy aplikasi Laravel
+│   └── express/                # Deploy aplikasi Express.js
 └── site.yml                    # Master playbook
 ```
 
@@ -36,41 +40,77 @@ Edit file `inventory/hosts` dengan data server Anda:
 server1 ansible_host=YOUR_IP ansible_user=YOUR_USER ansible_ssh_private_key_file=~/.ssh/your_key
 ```
 
-### 2. Update Variables di Playbook
+### 2. Bootstrap Server (Setup Semua Requirements)
 
-Edit `playbooks/deploy-laravel.yml`:
+```bash
+# Setup lengkap: Common, MySQL, Nginx, PHP, Composer, Node.js
+ansible-playbook playbooks/bootstrap.yml
 
-```yaml
-vars:
-  project_name: "nama_project_anda"
-  domain: "domain-anda.com"
-  repo_url: "git@github.com:username/repo.git"
-  
-  db_name: "nama_database"
-  db_user: "user_database"
-  db_pass: "password_database"
+# Skip MySQL jika sudah ada atau tidak perlu
+ansible-playbook playbooks/bootstrap.yml --skip-tags mysql
+
+# Hanya install PHP dan Composer
+ansible-playbook playbooks/bootstrap.yml --tags php,composer
+
+# Hanya install Node.js
+ansible-playbook playbooks/bootstrap.yml --tags node
 ```
 
-### 3. Jalankan Playbook
+### 3. Deploy Laravel Application
 
-**Deploy pertama kali (first install):**
 ```bash
+# Deploy pertama kali
 ansible-playbook playbooks/deploy-laravel.yml -e "first_install=true"
-```
 
-**Deploy update (regular deployment):**
-```bash
+# Deploy update
 ansible-playbook playbooks/deploy-laravel.yml
 ```
 
-**Deploy dengan seeders:**
+---
+
+## 📦 Bootstrap Playbook
+
+Bootstrap playbook menginstall semua requirements untuk menjalankan aplikasi web:
+
+| Component | Deskripsi |
+|-----------|-----------|
+| **Common** | Update system, UFW firewall, Fail2ban, essential packages |
+| **MySQL** | MariaDB server + client |
+| **Nginx** | Web server |
+| **PHP** | PHP 8.3 + extensions (fpm, mysql, xml, mbstring, zip, curl, gd, bcmath, intl, opcache) |
+| **Composer** | PHP dependency manager |
+| **Node.js** | Node.js v20 + npm + PM2 |
+
+### Cara Penggunaan:
+
 ```bash
-ansible-playbook playbooks/deploy-laravel.yml -e "run_seeders=true"
+# Full bootstrap
+ansible-playbook playbooks/bootstrap.yml
+
+# Dengan custom variables
+ansible-playbook playbooks/bootstrap.yml \
+  -e "php_version=8.2" \
+  -e "node_version=18" \
+  -e "timezone=UTC"
 ```
 
-## 📋 Variables yang Tersedia
+### Bootstrap Variables:
 
-### Laravel Role Variables
+| Variable | Default | Deskripsi |
+|----------|---------|-----------|
+| `timezone` | `Asia/Jakarta` | Timezone server |
+| `upgrade_packages` | `true` | Upgrade semua packages |
+| `php_version` | `8.3` | Versi PHP |
+| `node_version` | `20` | Versi Node.js |
+| `deploy_user` | `deploy` | User untuk deployment |
+| `allow_http` | `true` | Allow port 80 di firewall |
+| `allow_https` | `true` | Allow port 443 di firewall |
+
+---
+
+## 🔧 Deploy Laravel
+
+### Variables:
 
 | Variable | Default | Deskripsi |
 |----------|---------|-----------|
@@ -79,15 +119,14 @@ ansible-playbook playbooks/deploy-laravel.yml -e "run_seeders=true"
 | `repo_url` | required | Git repository URL |
 | `git_branch` | `main` | Branch yang akan di-deploy |
 | `deploy_user` | `www-data` | User untuk deploy |
-| `php_version` | `8.3` | Versi PHP |
 | `first_install` | `false` | Set `true` untuk deploy pertama |
-| `enable_maintenance_mode` | `true` | Aktifkan maintenance mode saat deploy |
+| `enable_maintenance_mode` | `true` | Maintenance mode saat deploy |
 | `run_seeders` | `false` | Jalankan db:seed |
 | `cache_config` | `true` | Cache Laravel config |
 | `cache_routes` | `true` | Cache Laravel routes |
 | `cache_views` | `true` | Cache Laravel views |
 
-### Database Variables
+### Database Variables:
 
 | Variable | Default | Deskripsi |
 |----------|---------|-----------|
@@ -97,119 +136,119 @@ ansible-playbook playbooks/deploy-laravel.yml -e "run_seeders=true"
 | `db_host` | `127.0.0.1` | Database host |
 | `db_port` | `3306` | Database port |
 
-### Nginx Variables
+### Contoh Playbook Variables:
 
-| Variable | Default | Deskripsi |
-|----------|---------|-----------|
-| `use_ssl` | `false` | Aktifkan konfigurasi SSL |
-| `ssl_certificate` | auto | Path ke SSL certificate |
-| `ssl_certificate_key` | auto | Path ke SSL private key |
-| `client_max_body_size` | `64M` | Maksimal upload size |
-| `static_cache_days` | `30` | Caching untuk file statis |
+```yaml
+vars:
+  project_name: "myapp"
+  domain: "myapp.com"
+  repo_url: "git@github.com:user/myapp.git"
+  
+  db_name: "myapp_db"
+  db_user: "myapp_user"
+  db_pass: "secure_password"
+  
+  app_name: "My Application"
+  app_timezone: "Asia/Jakarta"
+```
 
-### Environment Variables (dalam .env)
+---
 
-| Variable | Default | Deskripsi |
-|----------|---------|-----------|
-| `app_name` | `Laravel` | APP_NAME |
-| `app_env` | `production` | APP_ENV |
-| `app_debug` | `false` | APP_DEBUG |
-| `app_timezone` | `Asia/Jakarta` | APP_TIMEZONE |
-| `session_driver` | `database` | SESSION_DRIVER |
-| `queue_connection` | `sync` | QUEUE_CONNECTION |
-| `cache_driver` | `file` | CACHE_DRIVER |
+## 📝 Workflow
 
-## 🔧 Contoh Penggunaan
-
-### Deploy Project Baru
+### Setup Server Baru:
 
 ```bash
-# 1. Test koneksi ke server
+# 1. Test koneksi
 ansible webserver -m ping
 
-# 2. Deploy dengan first_install
-ansible-playbook playbooks/deploy-laravel.yml \
-  -e "first_install=true" \
-  -e "project_name=myapp" \
-  -e "domain=myapp.com" \
-  -e "repo_url=git@github.com:user/myapp.git"
+# 2. Bootstrap server
+ansible-playbook playbooks/bootstrap.yml
+
+# 3. Deploy Laravel
+ansible-playbook playbooks/deploy-laravel.yml -e "first_install=true"
 ```
 
-### Deploy Update
+### Deploy Update:
 
 ```bash
-ansible-playbook playbooks/deploy-laravel.yml --tags laravel
+# Simple deploy
+ansible-playbook playbooks/deploy-laravel.yml
+
+# Dengan seeders
+ansible-playbook playbooks/deploy-laravel.yml -e "run_seeders=true"
+
+# Tanpa maintenance mode
+ansible-playbook playbooks/deploy-laravel.yml -e "enable_maintenance_mode=false"
 ```
 
-### Setup PHP (gunakan playbook terpisah)
+---
+
+## 🏷️ Tags Reference
+
+### Bootstrap Tags:
+| Tag | Roles |
+|-----|-------|
+| `common`, `base` | Common role |
+| `mysql`, `database` | MySQL role |
+| `nginx`, `webserver` | Nginx role |
+| `php` | PHP role |
+| `composer` | Composer role |
+| `node`, `nodejs` | Node.js role |
+
+### Deploy Tags:
+| Tag | Roles |
+|-----|-------|
+| `laravel`, `deploy` | Laravel role |
+
+### Contoh Penggunaan Tags:
 
 ```bash
-ansible-playbook playbooks/php.yml
+# Hanya install PHP dan Composer
+ansible-playbook playbooks/bootstrap.yml --tags php,composer
+
+# Skip database
+ansible-playbook playbooks/bootstrap.yml --skip-tags mysql
+
+# Hanya setup webserver
+ansible-playbook playbooks/bootstrap.yml --tags nginx
 ```
 
-### Setup Nginx (gunakan playbook terpisah)
-
-```bash
-ansible-playbook playbooks/webserver.yml
-```
-
-### Dengan Password Database dari Vault
-
-```bash
-# Buat vault file untuk password
-ansible-vault create group_vars/vault.yml
-
-# Jalankan dengan vault
-ansible-playbook playbooks/deploy-laravel.yml --ask-vault-pass
-```
-
-## 📝 Workflow Deploy
-
-1. **Maintenance Mode ON** - Laravel masuk mode maintenance
-2. **Git Pull** - Tarik kode terbaru dari repository
-3. **Update .env** - Push file environment dari template
-4. **Composer Install** - Install dependencies
-5. **Database Migration** - Jalankan migration
-6. **Clear Cache** - Bersihkan semua cache Laravel
-7. **Optimize Cache** - Cache config, routes, views
-8. **Fix Permissions** - Set permissions storage & bootstrap/cache
-9. **Restart PHP-FPM** - Restart PHP-FPM service
-10. **Maintenance Mode OFF** - Laravel aktif kembali
+---
 
 ## ⚠️ Troubleshooting
 
 ### Permission Denied saat Git Clone
 
-Pastikan deploy user memiliki akses ke repository:
 ```bash
 # Generate SSH key di server
 ssh-keygen -t ed25519 -C "deploy@server"
 
-# Tambahkan public key ke GitHub Deploy Keys
+# Tambahkan ke GitHub Deploy Keys
 cat ~/.ssh/id_ed25519.pub
 ```
 
 ### Composer Memory Error
 
-Tambahkan swap atau tingkatkan memory limit:
 ```bash
-# Di server
+# Tambah swap
 sudo fallocate -l 2G /swapfile
 sudo chmod 600 /swapfile
 sudo mkswap /swapfile
 sudo swapon /swapfile
 ```
 
-### MySQL Authentication Error
+### MySQL Connection Error
 
-Pastikan PyMySQL terinstall:
-```yaml
-# Sudah ditangani di role laravel/tasks/setup-db.yml
-- name: Install PyMySQL
-  apt:
-    name: python3-pymysql
-    state: present
+```bash
+# Login dengan socket
+sudo mysql -u root
+
+# Atau cek status
+sudo systemctl status mariadb
 ```
+
+---
 
 ## 📄 License
 
