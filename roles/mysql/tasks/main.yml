@@ -1,7 +1,51 @@
-# MySQL/MariaDB Installation Role
-# Installs and configures MySQL or MariaDB server
+# MySQL Installation Role for Ubuntu 24.04
+# Installs and configures MySQL 8.x server
+# Supports both MySQL and MariaDB based on configuration
 
-- name: Install MySQL/MariaDB server
+---
+# Determine which database type to install
+- name: Set database type
+  set_fact:
+    db_type: "{{ mysql_db_type | default('mysql') }}"
+  tags: [mysql]
+
+# ============================================
+# MySQL 8.x Installation (Default)
+# ============================================
+- name: Install MySQL 8.x server (Ubuntu 24.04)
+  apt:
+    name:
+      - mysql-server
+      - mysql-client
+      - python3-pymysql
+    state: present
+    update_cache: yes
+  become: true
+  when: db_type == 'mysql'
+  tags: [mysql]
+
+- name: Start and enable MySQL
+  systemd:
+    name: mysql
+    state: started
+    enabled: true
+  become: true
+  when: db_type == 'mysql'
+  tags: [mysql]
+
+- name: Wait for MySQL socket to be available
+  wait_for:
+    path: /var/run/mysqld/mysqld.sock
+    state: present
+    timeout: 30
+  become: true
+  when: db_type == 'mysql'
+  tags: [mysql]
+
+# ============================================
+# MariaDB Installation (Alternative)
+# ============================================
+- name: Install MariaDB server
   apt:
     name:
       - mariadb-server
@@ -10,6 +54,8 @@
     state: present
     update_cache: yes
   become: true
+  when: db_type == 'mariadb'
+  tags: [mysql]
 
 - name: Start and enable MariaDB
   systemd:
@@ -17,17 +63,55 @@
     state: started
     enabled: true
   become: true
+  when: db_type == 'mariadb'
+  tags: [mysql]
 
-- name: Set root password
+- name: Wait for MariaDB socket to be available
+  wait_for:
+    path: /var/run/mysqld/mysqld.sock
+    state: present
+    timeout: 30
+  become: true
+  when: db_type == 'mariadb'
+  tags: [mysql]
+
+# ============================================
+# Common MySQL/MariaDB Configuration
+# ============================================
+- name: Check if MySQL root password is already set
+  shell: |
+    mysql -u root -e "SELECT 1" 2>/dev/null && echo "no_password" || echo "has_password"
+  register: mysql_root_check
+  changed_when: false
+  become: true
+  ignore_errors: true
+  tags: [mysql]
+
+- name: Set MySQL root password (if not set)
   mysql_user:
     name: root
     password: "{{ mysql_root_password | default('root') }}"
     login_unix_socket: /var/run/mysqld/mysqld.sock
     host_all: true
     state: present
+    column_case_sensitive: false
   become: true
   no_log: true
+  when: 
+    - mysql_root_password is defined
+    - mysql_root_check.stdout == "no_password"
+  tags: [mysql]
+
+- name: Create .my.cnf for root user
+  template:
+    src: my.cnf.j2
+    dest: /root/.my.cnf
+    owner: root
+    group: root
+    mode: '0600'
+  become: true
   when: mysql_root_password is defined
+  tags: [mysql]
 
 - name: Remove anonymous users
   mysql_user:
@@ -36,6 +120,7 @@
     state: absent
     login_unix_socket: /var/run/mysqld/mysqld.sock
   become: true
+  tags: [mysql]
 
 - name: Remove test database
   mysql_db:
@@ -43,14 +128,18 @@
     state: absent
     login_unix_socket: /var/run/mysqld/mysqld.sock
   become: true
+  tags: [mysql]
 
 - name: Create application database
   mysql_db:
     name: "{{ mysql_database }}"
     state: present
     login_unix_socket: /var/run/mysqld/mysqld.sock
+    encoding: utf8mb4
+    collation: utf8mb4_unicode_ci
   become: true
   when: mysql_database is defined
+  tags: [mysql]
 
 - name: Create application database user
   mysql_user:
@@ -60,6 +149,30 @@
     state: present
     login_unix_socket: /var/run/mysqld/mysqld.sock
     host: "{{ mysql_user_host | default('localhost') }}"
+    column_case_sensitive: false
   become: true
   no_log: true
   when: mysql_user is defined and mysql_password is defined and mysql_database is defined
+  tags: [mysql]
+
+- name: Allow remote MySQL connections (if configured)
+  lineinfile:
+    path: /etc/mysql/mysql.conf.d/mysqld.cnf
+    regexp: '^bind-address'
+    line: 'bind-address = {{ mysql_bind_address | default("127.0.0.1") }}'
+  become: true
+  when: db_type == 'mysql' and mysql_allow_remote | default(false)
+  notify: restart mysql
+  tags: [mysql]
+
+- name: Verify MySQL is running
+  shell: mysql -u root -e "SELECT 'MySQL is running' as status;"
+  register: mysql_status
+  changed_when: false
+  become: true
+  tags: [mysql]
+
+- name: Display MySQL status
+  debug:
+    msg: "{{ mysql_status.stdout }}"
+  tags: [mysql]

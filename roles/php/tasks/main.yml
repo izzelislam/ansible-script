@@ -1,3 +1,28 @@
+# PHP Installation Role
+# Supports Ubuntu 22.04 (needs Sury PPA) and Ubuntu 24.04 (uses native PHP 8.3)
+
+---
+- name: Set PHP version
+  set_fact:
+    php_version: "{{ php_version | default('8.3') }}"
+  tags: [php]
+
+- name: Check Ubuntu version
+  set_fact:
+    use_sury_ppa: "{{ ansible_distribution_major_version | int < 24 }}"
+  tags: [php]
+
+- name: Display PHP installation info
+  debug:
+    msg: |
+      Installing PHP {{ php_version }}
+      Ubuntu Version: {{ ansible_distribution_version }}
+      Using Sury PPA: {{ use_sury_ppa }}
+  tags: [php]
+
+# ============================================
+# Pre-requisites
+# ============================================
 - name: Install required packages
   apt:
     name:
@@ -6,40 +31,123 @@
       - curl
       - gnupg
       - lsb-release
+      - software-properties-common
     state: present
     update_cache: yes
+  become: true
+  tags: [php]
 
-- name: Add Sury PHP GPG key
+# ============================================
+# Sury PPA (for Ubuntu < 24.04 only)
+# ============================================
+- name: Add Sury PHP GPG key (Ubuntu < 24.04)
   shell: |
     curl -fsSL https://packages.sury.org/php/apt.gpg | gpg --dearmor -o /usr/share/keyrings/sury-php.gpg
   args:
     creates: /usr/share/keyrings/sury-php.gpg
+  become: true
+  when: use_sury_ppa
+  tags: [php]
 
-- name: Add Sury PHP repository
+- name: Add Sury PHP repository (Ubuntu < 24.04)
   apt_repository:
     repo: "deb [signed-by=/usr/share/keyrings/sury-php.gpg] https://packages.sury.org/php/ {{ ansible_distribution_release }} main"
     state: present
     filename: sury-php
     update_cache: yes
+  become: true
+  when: use_sury_ppa
+  tags: [php]
 
-- name: Install PHP 8.3 and extensions
+# ============================================
+# Install PHP (works for both Ubuntu 22.04 and 24.04)
+# ============================================
+- name: Update apt cache
+  apt:
+    update_cache: yes
+  become: true
+  tags: [php]
+
+- name: Install PHP {{ php_version }} and common extensions
   apt:
     name:
-      - php8.3-fpm
-      - php8.3-cli
-      - php8.3-mysql
-      - php8.3-xml
-      - php8.3-mbstring
-      - php8.3-zip
-      - php8.3-curl
-      - php8.3-gd
-      - php8.3-bcmath
-      - php8.3-intl
-      - php8.3-opcache
+      - "php{{ php_version }}-fpm"
+      - "php{{ php_version }}-cli"
+      - "php{{ php_version }}-mysql"
+      - "php{{ php_version }}-pgsql"
+      - "php{{ php_version }}-sqlite3"
+      - "php{{ php_version }}-xml"
+      - "php{{ php_version }}-mbstring"
+      - "php{{ php_version }}-zip"
+      - "php{{ php_version }}-curl"
+      - "php{{ php_version }}-gd"
+      - "php{{ php_version }}-bcmath"
+      - "php{{ php_version }}-intl"
+      - "php{{ php_version }}-opcache"
+      - "php{{ php_version }}-readline"
+      - "php{{ php_version }}-tokenizer"
     state: present
+  become: true
+  tags: [php]
 
-- name: Enable and start PHP 8.3 FPM
+- name: Install additional PHP extensions for Laravel
+  apt:
+    name:
+      - "php{{ php_version }}-redis"
+      - "php{{ php_version }}-imagick"
+    state: present
+  become: true
+  ignore_errors: true  # Some extensions may not be available
+  tags: [php]
+
+# ============================================
+# PHP-FPM Configuration
+# ============================================
+- name: Enable and start PHP-FPM
   systemd:
-    name: php8.3-fpm
+    name: "php{{ php_version }}-fpm"
     enabled: true
     state: started
+  become: true
+  tags: [php]
+
+- name: Configure PHP-FPM pool (optional optimization)
+  lineinfile:
+    path: "/etc/php/{{ php_version }}/fpm/pool.d/www.conf"
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+  loop:
+    - { regexp: '^;?pm.max_children', line: 'pm.max_children = 50' }
+    - { regexp: '^;?pm.start_servers', line: 'pm.start_servers = 5' }
+    - { regexp: '^;?pm.min_spare_servers', line: 'pm.min_spare_servers = 5' }
+    - { regexp: '^;?pm.max_spare_servers', line: 'pm.max_spare_servers = 35' }
+  become: true
+  notify: restart php-fpm
+  tags: [php]
+
+- name: Configure PHP settings (php.ini)
+  lineinfile:
+    path: "/etc/php/{{ php_version }}/fpm/php.ini"
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+  loop:
+    - { regexp: '^;?upload_max_filesize', line: 'upload_max_filesize = 64M' }
+    - { regexp: '^;?post_max_size', line: 'post_max_size = 64M' }
+    - { regexp: '^;?memory_limit', line: 'memory_limit = 256M' }
+    - { regexp: '^;?max_execution_time', line: 'max_execution_time = 300' }
+  become: true
+  notify: restart php-fpm
+  tags: [php]
+
+- name: Verify PHP installation
+  shell: php -v | head -n1
+  register: php_installed_version
+  changed_when: false
+  become: true
+  tags: [php]
+
+- name: Display PHP version
+  debug:
+    msg: "{{ php_installed_version.stdout }}"
+  tags: [php]
+

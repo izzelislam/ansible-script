@@ -1,8 +1,8 @@
 ; [laravel]
 ; droplet-a ansible_host=178.128.107.125 ansible_user=dev ansible_ssh_private_key_file=~/.ssh/id_rsa
 
-[cokelatos]
-cokelatos ansible_host=103.189.234.240 ansible_user=cokelatos ansible_ssh_pass=vZWpB6P!hJnZYeT
+[poles_servers]
+poles ansible_host=27.112.78.133 ansible_user=poles ansible_ssh_pass=N2av.3THjtsi3KK
 
 ; [ci4]
 ; droplet-b ansible_host=143.198.95.84 ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/ci4_key

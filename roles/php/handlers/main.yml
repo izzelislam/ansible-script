@@ -1,0 +1,14 @@
+# PHP Role Handlers
+
+---
+- name: restart php-fpm
+  systemd:
+    name: "php{{ php_version | default('8.3') }}-fpm"
+    state: restarted
+  become: true
+
+- name: reload php-fpm
+  systemd:
+    name: "php{{ php_version | default('8.3') }}-fpm"
+    state: reloaded
+  become: true

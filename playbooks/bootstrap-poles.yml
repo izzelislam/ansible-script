@@ -1,0 +1,164 @@
+# Bootstrap Playbook for poles server
+# Ubuntu 24.04 with MySQL 8.x
+#
+# Usage:
+#   Full setup:        ansible-playbook playbooks/bootstrap-poles.yml
+#   Only MySQL:        ansible-playbook playbooks/bootstrap-poles.yml --tags mysql
+#   Skip MySQL:        ansible-playbook playbooks/bootstrap-poles.yml --skip-tags mysql
+#   Test connection:   ansible-playbook playbooks/bootstrap-poles.yml --tags test
+
+---
+- name: Bootstrap Poles Server - Ubuntu 24.04
+  hosts: poles_servers
+  become: true
+
+  vars:
+    # System Configuration
+    timezone: "Asia/Jakarta"
+    upgrade_packages: false  # Set true jika ingin upgrade semua paket
+    
+    # Deploy User (menggunakan user poles yang sudah ada)
+    deploy_user: "poles"
+    create_deploy_user: false
+    
+    # PHP Configuration
+    php_version: "8.3"
+    
+    # Node.js Configuration
+    node_version: "20"
+    npm_global_packages:
+      - pm2
+    
+    # MySQL Configuration
+    mysql_db_type: "mysql"  # Gunakan MySQL 8.x (bukan MariaDB)
+    mysql_root_password: "SecureRootPassword123!"  # Ganti dengan password yang aman
+    
+    # Uncomment untuk membuat database aplikasi
+    # mysql_database: "your_app_db"
+    # mysql_user: "app_user"
+    # mysql_password: "app_password_here"
+    
+    # Firewall
+    allow_http: true
+    allow_https: true
+
+  pre_tasks:
+    - name: Gather facts
+      setup:
+      tags: [always]
+
+    - name: Display system info
+      debug:
+        msg: |
+          🚀 Starting Server Bootstrap
+          ============================
+          Host: {{ inventory_hostname }}
+          OS: {{ ansible_distribution }} {{ ansible_distribution_version }}
+          Timezone: {{ timezone }}
+          PHP Version: {{ php_version }}
+          MySQL Type: {{ mysql_db_type }}
+          ============================
+      tags: [always]
+
+    - name: Check Ubuntu version
+      assert:
+        that:
+          - ansible_distribution == "Ubuntu"
+          - ansible_distribution_major_version | int >= 22
+        fail_msg: "This playbook requires Ubuntu 22.04 or higher. Current: {{ ansible_distribution }} {{ ansible_distribution_version }}"
+      tags: [always]
+
+  roles:
+    - role: common
+      tags: [common, base]
+    
+    - role: mysql
+      tags: [mysql, database]
+    
+    - role: nginx
+      tags: [nginx, webserver]
+    
+    - role: php
+      tags: [php]
+    
+    - role: composer
+      tags: [composer, php]
+    
+    - role: node
+      tags: [node, nodejs]
+
+  post_tasks:
+    - name: Get installed versions
+      shell: |
+        echo "=== Installed Software Versions ==="
+        echo "PHP: $(php -v 2>/dev/null | head -n1 || echo 'Not installed')"
+        echo "Composer: $(composer --version 2>/dev/null | head -n1 || echo 'Not installed')"
+        echo "Node: $(node --version 2>/dev/null || echo 'Not installed')"
+        echo "npm: $(npm --version 2>/dev/null || echo 'Not installed')"
+        echo "MySQL: $(mysql --version 2>/dev/null || echo 'Not installed')"
+        echo "Nginx: $(nginx -v 2>&1 || echo 'Not installed')"
+        echo "==================================="
+      register: versions
+      changed_when: false
+      tags: [always]
+
+    - name: Test MySQL connection
+      shell: mysql -u root -e "SELECT VERSION() as mysql_version;"
+      register: mysql_test
+      changed_when: false
+      ignore_errors: true
+      tags: [mysql, test]
+
+    - name: Display completion info
+      debug:
+        msg: |
+          ✅ Bootstrap Complete!
+          ======================
+          
+          📦 {{ versions.stdout }}
+          
+          🗄️ MySQL Status:
+          {{ mysql_test.stdout | default('Unable to connect') }}
+          
+          📝 Next Steps:
+          1. Configure your application
+          2. Set MySQL database variables and re-run with --tags mysql
+          3. Deploy your app: ansible-playbook playbooks/deploy-laravel.yml
+          
+          🔒 Security:
+          - UFW Firewall: Enabled (SSH, HTTP, HTTPS allowed)
+          - Fail2ban: Active
+          
+          👤 Deploy User: {{ deploy_user }}
+      tags: [always]
+
+# ============================================
+# MySQL Only Playbook (for testing)
+# ============================================
+- name: Test MySQL Installation Only
+  hosts: poles_servers
+  become: true
+  tags: [mysql-only, never]
+
+  vars:
+    mysql_db_type: "mysql"
+    mysql_root_password: "SecureRootPassword123!"
+    mysql_database: "test_db"
+    mysql_user: "test_user"
+    mysql_password: "TestPassword123!"
+
+  roles:
+    - role: mysql
+      tags: [mysql]
+
+  post_tasks:
+    - name: Verify MySQL installation
+      shell: |
+        mysql -u root -e "SHOW DATABASES;"
+        mysql -u root -e "SELECT user, host FROM mysql.user;"
+      register: mysql_verify
+      changed_when: false
+
+    - name: Display MySQL info
+      debug:
+        msg: "{{ mysql_verify.stdout }}"

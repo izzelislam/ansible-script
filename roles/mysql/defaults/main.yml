@@ -1,3 +1,26 @@
 # Default variables for MySQL role
+# Ubuntu 24.04 compatible
+
+---
+# Database type: 'mysql' or 'mariadb' (default: mysql)
+mysql_db_type: "mysql"
+
+# MySQL root password (recommended to set this)
 mysql_root_password: ""
+
+# MySQL bind address (127.0.0.1 = localhost only, 0.0.0.0 = all interfaces)
+mysql_bind_address: "127.0.0.1"
+
+# Allow remote connections
+mysql_allow_remote: false
+
+# Default host for application user
 mysql_user_host: "localhost"
+
+# Character set and collation
+mysql_charset: "utf8mb4"
+mysql_collation: "utf8mb4_unicode_ci"
+
+# Max connections
+mysql_max_connections: 151
+
