@@ -1,0 +1,19 @@
+# Laravel Role Handlers
+
+- name: Restart PHP-FPM
+  systemd:
+    name: "php{{ php_version | default('8.3') }}-fpm"
+    state: restarted
+  become: true
+
+- name: Reload Nginx
+  systemd:
+    name: nginx
+    state: reloaded
+  become: true
+
+- name: Restart Nginx
+  systemd:
+    name: nginx
+    state: restarted
+  become: true

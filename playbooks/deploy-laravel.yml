@@ -1,14 +1,100 @@
-- hosts: prodVps
-  become: true
-  vars:
-    domain: "sinaucode.dev"
-    project_name: "sinaucodeV2"
-    repo_url: "git@github.com:username/repo.git"
+# Deploy Laravel Application Playbook
+# This playbook deploys a Laravel application with Nginx reverse proxy
+#
+# Usage:
+#   First deployment: ansible-playbook playbooks/deploy-laravel.yml -e "first_install=true"
+#   Regular deploy:   ansible-playbook playbooks/deploy-laravel.yml
+#   With SSL:         ansible-playbook playbooks/deploy-laravel.yml -e "use_ssl=true"
 
+- name: Deploy Laravel Application
+  hosts: cokelatos
+  become: true
+  
+  vars:
+    # Application Configuration
+    project_name: "sinaucodeV2"
+    domain: "sinaucode.dev"
+    repo_url: "git@github.com:username/repo.git"
+    git_branch: "main"
+    
+    # PHP Version
+    php_version: "8.3"
+    
+    # Deployment User (should have SSH access to git repo)
+    deploy_user: "cokelatos"
+    
+    # Database Configuration
     db_name: "sinaucodedb"
     db_user: "newadmin"
-    db_pass: "secretStrongP@ssw0rd!"
+    db_pass: "{{ vault_db_pass | default('secretStrongP@ssw0rd!') }}"
+    
+    # Application Settings
+    app_name: "SinauCode"
+    app_env: production
+    app_debug: "false"
+    app_timezone: "Asia/Jakarta"
+    
+    # SSL Configuration (set use_ssl: true to enable)
+    use_ssl: false
+    # ssl_certificate: "/etc/ssl/certs/your-cert.pem"
+    # ssl_certificate_key: "/etc/ssl/private/your-key.pem"
+    
+    # Upload limits
+    client_max_body_size: "100M"
+    
+    # Caching (recommended for production)
+    cache_config: true
+    cache_routes: true
+    cache_views: true
+    
+    # Feature flags
+    enable_maintenance_mode: true
+    run_seeders: false
+
+  pre_tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+      become: true
+
+    - name: Ensure required packages are installed
+      apt:
+        name:
+          - git
+          - unzip
+          - curl
+          - acl
+        state: present
+      become: true
 
   roles:
-    - laravel
-    - nginx
+    - role: php
+      tags: [php, setup]
+    - role: nginx
+      tags: [nginx, webserver]
+    - role: laravel
+      tags: [laravel, deploy]
+
+  post_tasks:
+    - name: Display deployment information
+      debug:
+        msg: |
+          ✅ Deployment completed successfully!
+          
+          📋 Application Details:
+          - Project: {{ project_name }}
+          - Domain: {{ domain }}
+          - Path: /var/www/{{ project_name }}
+          - PHP Version: {{ php_version }}
+          
+          {% if use_ssl %}
+          🔒 SSL is enabled - Access via https://{{ domain }}
+          {% else %}
+          ⚠️  SSL is disabled - Access via http://{{ domain }}
+          {% endif %}
+          
+          📝 Next steps:
+          - Verify the application is running
+          - Check logs at /var/log/nginx/{{ project_name }}_error.log
+          - For SSL, run: ansible-playbook playbooks/deploy-laravel.yml -e "use_ssl=true"

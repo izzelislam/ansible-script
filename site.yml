@@ -1,0 +1,12 @@
+# Site Configuration (Master Playbook)
+# Include all roles needed for complete server setup
+
+- name: Complete Server Setup for Laravel
+  hosts: all
+  become: true
+  
+  roles:
+    - common
+    - php
+    - nginx
+    - laravel

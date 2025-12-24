@@ -1,13 +1,41 @@
-- name: Create DB
+# MySQL Database Setup for Laravel
+# Creates database and user with appropriate privileges
+
+- name: Check if MySQL/MariaDB is installed
+  command: which mysql
+  register: mysql_check
+  changed_when: false
+  failed_when: false
+
+- name: Install PyMySQL for Ansible MySQL modules
+  apt:
+    name: python3-pymysql
+    state: present
+  become: true
+  when: mysql_check.rc == 0
+
+- name: Create database
   mysql_db:
     name: "{{ db_name }}"
     state: present
+    login_unix_socket: /var/run/mysqld/mysqld.sock
   become: true
+  when: mysql_check.rc == 0
 
-- name: Create DB User
+- name: Create database user
   mysql_user:
     name: "{{ db_user }}"
     password: "{{ db_pass }}"
     priv: "{{ db_name }}.*:ALL"
     state: present
+    login_unix_socket: /var/run/mysqld/mysqld.sock
+    host: "{{ db_host | default('localhost') }}"
   become: true
+  when: mysql_check.rc == 0
+  no_log: true
+
+- name: Flush privileges
+  command: mysql -e "FLUSH PRIVILEGES;"
+  become: true
+  changed_when: false
+  when: mysql_check.rc == 0

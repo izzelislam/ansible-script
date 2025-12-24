@@ -1,8 +1,11 @@
-- name: Ensure directory exists
+# Laravel Installation Tasks
+# Used for first-time deployment
+
+- name: Ensure project directory exists
   file:
     path: "/var/www/{{ project_name }}"
     state: directory
-    owner: bengbeng
+    owner: "{{ deploy_user | default('www-data') }}"
     group: www-data
     mode: "0755"
   become: true
@@ -11,7 +14,18 @@
   git:
     repo: "{{ repo_url }}"
     dest: "/var/www/{{ project_name }}"
-    version: main
+    version: "{{ git_branch | default('main') }}"
+    accept_hostkey: true
+  become: true
+  become_user: "{{ deploy_user | default('www-data') }}"
+
+- name: Copy .env file from template
+  template:
+    src: ".env.j2"
+    dest: "/var/www/{{ project_name }}/.env"
+    owner: "{{ deploy_user | default('www-data') }}"
+    group: www-data
+    mode: "0644"
   become: true
 
 - name: Install composer dependencies
@@ -21,13 +35,44 @@
     no_dev: true
     optimize_autoloader: true
   become: true
+  become_user: "{{ deploy_user | default('www-data') }}"
+  environment:
+    COMPOSER_NO_INTERACTION: "1"
+    COMPOSER_ALLOW_SUPERUSER: "1"
 
-- name: Generate Laravel key
+- name: Generate Laravel application key
   command: php artisan key:generate --force
   args:
     chdir: "/var/www/{{ project_name }}"
   register: genkey
+  changed_when: "'generated successfully' in genkey.stdout"
+  become: true
+  become_user: "{{ deploy_user | default('www-data') }}"
+
+- name: Set storage directory permissions
+  file:
+    path: "/var/www/{{ project_name }}/storage"
+    state: directory
+    recurse: true
+    owner: www-data
+    group: www-data
+    mode: "0775"
   become: true
 
-- set_fact:
-    app_key: "{{ genkey.stdout | regex_search('base64:.*') }}"
+- name: Set bootstrap/cache directory permissions
+  file:
+    path: "/var/www/{{ project_name }}/bootstrap/cache"
+    state: directory
+    recurse: true
+    owner: www-data
+    group: www-data
+    mode: "0775"
+  become: true
+
+- name: Create storage symlink
+  command: php artisan storage:link
+  args:
+    chdir: "/var/www/{{ project_name }}"
+    creates: "/var/www/{{ project_name }}/public/storage"
+  become: true
+  become_user: "{{ deploy_user | default('www-data') }}"

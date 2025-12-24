@@ -1,0 +1,20 @@
+# Default variables for Nginx role
+
+# PHP version (for FPM socket)
+php_version: "8.3"
+
+# SSL settings
+use_ssl: false
+
+# Upload limits
+client_max_body_size: "64M"
+
+# Timeout settings
+fastcgi_read_timeout: 300
+fastcgi_send_timeout: 300
+
+# Static file caching (days)
+static_cache_days: 30
+
+# Content Security Policy
+enable_csp: false

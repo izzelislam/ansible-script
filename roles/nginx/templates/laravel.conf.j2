@@ -1,23 +1,71 @@
+# Nginx configuration for Laravel (HTTP only)
+# For development or behind a reverse proxy/load balancer
+
 server {
     listen 80;
+    listen [::]:80;
+    
     server_name {{ domain }};
 
-    root {{ app_root }}/public;
-    index index.php index.html;
+    root /var/www/{{ project_name }}/public;
+    index index.php index.html index.htm;
 
-    access_log /var/log/nginx/laravel_access.log;
-    error_log  /var/log/nginx/laravel_error.log;
+    access_log /var/log/nginx/{{ project_name }}_access.log;
+    error_log  /var/log/nginx/{{ project_name }}_error.log;
 
+    # Security headers
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+    # Client body size for file uploads
+    client_max_body_size {{ client_max_body_size | default('64M') }};
+
+    # Main location
     location / {
         try_files $uri $uri/ /index.php?$query_string;
     }
 
+    # PHP processing
     location ~ \.php$ {
-        include snippets/fastcgi-php.conf;
-        fastcgi_pass unix:/run/php/php8.3-fpm.sock;
+        fastcgi_split_path_info ^(.+\.php)(/.+)$;
+        fastcgi_pass unix:/var/run/php/php{{ php_version | default('8.3') }}-fpm.sock;
+        fastcgi_index index.php;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        include fastcgi_params;
+        
+        # Timeout settings
+        fastcgi_read_timeout {{ fastcgi_read_timeout | default('300') }};
+        fastcgi_send_timeout {{ fastcgi_send_timeout | default('300') }};
     }
 
-    location ~ /\.ht {
+    # Static files caching
+    location ~* \.(jpg|jpeg|gif|png|css|js|ico|webp|svg|woff|woff2|ttf|eot)$ {
+        expires {{ static_cache_days | default('30') }}d;
+        add_header Cache-Control "public, immutable";
+        access_log off;
+    }
+
+    # SEO files
+    location = /favicon.ico { 
+        access_log off; 
+        log_not_found off; 
+    }
+    
+    location = /robots.txt { 
+        access_log off; 
+        log_not_found off; 
+    }
+
+    # Deny hidden files
+    location ~ /\.(?!well-known).* {
         deny all;
+    }
+
+    # Deny specific directories
+    location ~ ^/(\.git|vendor|\.env) {
+        deny all;
+        return 404;
     }
 }

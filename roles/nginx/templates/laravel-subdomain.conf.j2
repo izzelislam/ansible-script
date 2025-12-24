@@ -1,48 +1,103 @@
+# Nginx configuration for Laravel with SSL
+# Includes HTTP to HTTPS redirect and security headers
+
 server {
     listen 80;
     listen [::]:80;
 
     server_name {{ domain }};
-    return 302 https://$server_name$request_uri;
+    
+    # Redirect all HTTP to HTTPS
+    return 301 https://$server_name$request_uri;
 }
 
 server {
     listen 443 ssl http2;
     listen [::]:443 ssl http2;
 
-    client_max_body_size 100M;
-
     server_name {{ domain }};
     root /var/www/{{ project_name }}/public;
+    index index.php index.html index.htm;
 
-    ssl_certificate /etc/ssl/certs/bengbeng_crt.pem;
-    ssl_certificate_key /etc/ssl/private/bengbeng_key.pem;
-    ssl_client_certificate /etc/ssl/cloudflare.crt;
-    ssl_verify_client optional;
+    # SSL Configuration
+{% if ssl_certificate is defined and ssl_certificate_key is defined %}
+    ssl_certificate {{ ssl_certificate }};
+    ssl_certificate_key {{ ssl_certificate_key }};
+{% else %}
+    ssl_certificate /etc/ssl/certs/{{ domain }}.pem;
+    ssl_certificate_key /etc/ssl/private/{{ domain }}.key;
+{% endif %}
 
+{% if ssl_client_certificate is defined %}
+    ssl_client_certificate {{ ssl_client_certificate }};
+    ssl_verify_client {{ ssl_verify_client | default('optional') }};
+{% endif %}
+
+    # Modern SSL settings
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384;
+    ssl_prefer_server_ciphers off;
+    ssl_session_timeout 1d;
+    ssl_session_cache shared:SSL:50m;
+    ssl_session_tickets off;
+
+    # Logging
+    access_log /var/log/nginx/{{ project_name }}_access.log;
+    error_log  /var/log/nginx/{{ project_name }}_error.log;
+
+    # Security headers
     add_header X-Frame-Options "SAMEORIGIN" always;
     add_header X-XSS-Protection "1; mode=block" always;
     add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
     add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
+{% if enable_csp | default(false) %}
+    add_header Content-Security-Policy "{{ csp_policy | default(\"default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:;\") }}" always;
+{% endif %}
 
-    index index.php index.html;
+    # Client body size for file uploads
+    client_max_body_size {{ client_max_body_size | default('100M') }};
 
+    # Main location
     location / {
         try_files $uri $uri/ /index.php?$query_string;
     }
 
-    location = /sitemap.xml { allow all; access_log off; }
-    location = /robots.txt { allow all; access_log off; }
-    location = /favicon.ico { log_not_found off; access_log off; }
-
+    # PHP processing
     location ~ \.php$ {
-        fastcgi_pass unix:/var/run/php/php8.3-fpm.sock;
+        fastcgi_split_path_info ^(.+\.php)(/.+)$;
+        fastcgi_pass unix:/var/run/php/php{{ php_version | default('8.3') }}-fpm.sock;
         fastcgi_index index.php;
         fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;
         include fastcgi_params;
+        
+        # Timeout settings
+        fastcgi_read_timeout {{ fastcgi_read_timeout | default('300') }};
+        fastcgi_send_timeout {{ fastcgi_send_timeout | default('300') }};
+        fastcgi_buffer_size 128k;
+        fastcgi_buffers 4 256k;
     }
 
+    # Static files caching
+    location ~* \.(jpg|jpeg|gif|png|css|js|ico|webp|svg|woff|woff2|ttf|eot)$ {
+        expires {{ static_cache_days | default('30') }}d;
+        add_header Cache-Control "public, immutable";
+        access_log off;
+    }
+
+    # SEO files
+    location = /sitemap.xml { access_log off; allow all; }
+    location = /robots.txt { access_log off; log_not_found off; allow all; }
+    location = /favicon.ico { access_log off; log_not_found off; }
+
+    # Deny hidden files except .well-known
     location ~ /\.(?!well-known).* {
         deny all;
+    }
+
+    # Deny specific directories
+    location ~ ^/(\.git|vendor|\.env) {
+        deny all;
+        return 404;
     }
 }

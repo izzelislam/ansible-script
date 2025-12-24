@@ -1,32 +1,118 @@
-- name: Pull latest update
+# Laravel Deployment Tasks
+# Used for ongoing deployments and updates
+
+- name: Enable maintenance mode
+  command: php artisan down --refresh=30 --retry=60
+  args:
+    chdir: "/var/www/{{ project_name }}"
+  ignore_errors: true
+  become: true
+  become_user: "{{ deploy_user | default('www-data') }}"
+  when: enable_maintenance_mode | default(true)
+
+- name: Pull latest code from repository
   git:
     repo: "{{ repo_url }}"
     dest: "/var/www/{{ project_name }}"
-    version: main
+    version: "{{ git_branch | default('main') }}"
     force: yes
+    accept_hostkey: true
   become: true
+  become_user: "{{ deploy_user | default('www-data') }}"
+  register: git_pull_result
 
 - name: Push ENV file
   template:
     src: ".env.j2"
     dest: "/var/www/{{ project_name }}/.env"
+    owner: "{{ deploy_user | default('www-data') }}"
+    group: www-data
+    mode: "0644"
   become: true
 
-- name: Install composer update
+- name: Install/update composer dependencies
   composer:
     command: install
     working_dir: "/var/www/{{ project_name }}"
     no_dev: true
     optimize_autoloader: true
   become: true
+  become_user: "{{ deploy_user | default('www-data') }}"
+  environment:
+    COMPOSER_NO_INTERACTION: "1"
+    COMPOSER_ALLOW_SUPERUSER: "1"
+  when: git_pull_result.changed or force_composer_install | default(false)
 
-- name: Migrate database
+- name: Run database migrations
   command: php artisan migrate --force
   args:
     chdir: "/var/www/{{ project_name }}"
   become: true
+  become_user: "{{ deploy_user | default('www-data') }}"
+  register: migration_result
+  changed_when: "'Nothing to migrate' not in migration_result.stdout"
 
-- name: Set permissions
+- name: Run database seeders (optional)
+  command: php artisan db:seed --force
+  args:
+    chdir: "/var/www/{{ project_name }}"
+  become: true
+  become_user: "{{ deploy_user | default('www-data') }}"
+  when: run_seeders | default(false)
+
+- name: Clear application cache
+  command: php artisan cache:clear
+  args:
+    chdir: "/var/www/{{ project_name }}"
+  become: true
+  become_user: "{{ deploy_user | default('www-data') }}"
+
+- name: Clear config cache
+  command: php artisan config:clear
+  args:
+    chdir: "/var/www/{{ project_name }}"
+  become: true
+  become_user: "{{ deploy_user | default('www-data') }}"
+
+- name: Clear route cache
+  command: php artisan route:clear
+  args:
+    chdir: "/var/www/{{ project_name }}"
+  become: true
+  become_user: "{{ deploy_user | default('www-data') }}"
+
+- name: Clear view cache
+  command: php artisan view:clear
+  args:
+    chdir: "/var/www/{{ project_name }}"
+  become: true
+  become_user: "{{ deploy_user | default('www-data') }}"
+
+- name: Cache config for better performance
+  command: php artisan config:cache
+  args:
+    chdir: "/var/www/{{ project_name }}"
+  become: true
+  become_user: "{{ deploy_user | default('www-data') }}"
+  when: cache_config | default(true)
+
+- name: Cache routes for better performance
+  command: php artisan route:cache
+  args:
+    chdir: "/var/www/{{ project_name }}"
+  become: true
+  become_user: "{{ deploy_user | default('www-data') }}"
+  when: cache_routes | default(true)
+
+- name: Cache views for better performance
+  command: php artisan view:cache
+  args:
+    chdir: "/var/www/{{ project_name }}"
+  become: true
+  become_user: "{{ deploy_user | default('www-data') }}"
+  when: cache_views | default(true)
+
+- name: Set storage directory permissions
   file:
     path: "/var/www/{{ project_name }}/storage"
     state: directory
@@ -36,8 +122,32 @@
     mode: "0775"
   become: true
 
-- name: Reload nginx
-  service:
+- name: Set bootstrap/cache directory permissions
+  file:
+    path: "/var/www/{{ project_name }}/bootstrap/cache"
+    state: directory
+    recurse: true
+    owner: www-data
+    group: www-data
+    mode: "0775"
+  become: true
+
+- name: Restart PHP-FPM
+  systemd:
+    name: "php{{ php_version | default('8.3') }}-fpm"
+    state: restarted
+  become: true
+
+- name: Reload Nginx
+  systemd:
     name: nginx
     state: reloaded
   become: true
+
+- name: Disable maintenance mode
+  command: php artisan up
+  args:
+    chdir: "/var/www/{{ project_name }}"
+  become: true
+  become_user: "{{ deploy_user | default('www-data') }}"
+  when: enable_maintenance_mode | default(true)

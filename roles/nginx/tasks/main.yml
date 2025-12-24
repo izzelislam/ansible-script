@@ -1,13 +1,70 @@
-- name : Install Nginx
+# Nginx Role - Main Tasks
+# Installs and configures Nginx for Laravel/PHP applications
+
+- name: Install Nginx
   apt:
     name: nginx
     state: present
     update_cache: yes
+  become: true
 
-- name: Enable Nginx
+- name: Enable and start Nginx
   systemd:
     name: nginx
     enabled: true
     state: started
     daemon_reload: yes
-    
+  become: true
+
+- name: Create sites-available directory
+  file:
+    path: /etc/nginx/sites-available
+    state: directory
+    mode: "0755"
+  become: true
+
+- name: Create sites-enabled directory
+  file:
+    path: /etc/nginx/sites-enabled
+    state: directory
+    mode: "0755"
+  become: true
+
+- name: Remove default nginx site
+  file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+  become: true
+  notify: Reload Nginx
+
+- name: Deploy Laravel Nginx configuration (HTTP only)
+  template:
+    src: "laravel.conf.j2"
+    dest: "/etc/nginx/sites-available/{{ project_name }}.conf"
+    mode: "0644"
+  become: true
+  when: not use_ssl | default(false)
+  notify: Reload Nginx
+
+- name: Deploy Laravel Nginx configuration (with SSL)
+  template:
+    src: "laravel-subdomain.conf.j2"
+    dest: "/etc/nginx/sites-available/{{ project_name }}.conf"
+    mode: "0644"
+  become: true
+  when: use_ssl | default(false)
+  notify: Reload Nginx
+
+- name: Enable site configuration
+  file:
+    src: "/etc/nginx/sites-available/{{ project_name }}.conf"
+    dest: "/etc/nginx/sites-enabled/{{ project_name }}.conf"
+    state: link
+  become: true
+  notify: Reload Nginx
+
+- name: Test Nginx configuration
+  command: nginx -t
+  become: true
+  register: nginx_test
+  changed_when: false

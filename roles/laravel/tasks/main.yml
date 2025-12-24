@@ -1,2 +1,12 @@
-- include_tasks: setup-db.yml
-- include_tasks: deploy.yml
+# Laravel Role - Main Tasks
+# This role handles Laravel application deployment
+
+- name: Include install tasks (first deployment)
+  include_tasks: install.yml
+  when: first_install | default(false)
+
+- name: Include database setup
+  include_tasks: setup-db.yml
+
+- name: Include deploy tasks
+  include_tasks: deploy.yml

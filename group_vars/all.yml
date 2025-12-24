@@ -1,0 +1,15 @@
+# group_vars/all.yml - Global variables for all hosts
+# These can be overridden in host_vars or playbooks
+
+# Default PHP version
+php_version: "8.3"
+
+# Timezone
+timezone: "Asia/Jakarta"
+
+# Default environment
+app_env: production
+app_debug: "false"
+
+# Enable Ansible pipelining for better performance
+ansible_ssh_pipelining: true

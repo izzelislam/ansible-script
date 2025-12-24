@@ -1,0 +1,34 @@
+# Default variables for Laravel role
+
+# Application settings
+app_env: production
+app_debug: "false"
+app_timezone: "Asia/Jakarta"
+log_level: warning
+
+# Deployment settings
+git_branch: main
+deploy_user: www-data
+php_version: "8.3"
+
+# Feature flags
+first_install: false
+enable_maintenance_mode: true
+run_seeders: false
+force_composer_install: false
+
+# Caching (recommended for production)
+cache_config: true
+cache_routes: true
+cache_views: true
+
+# Laravel drivers
+session_driver: database
+queue_connection: sync
+cache_driver: file
+filesystem_disk: local
+
+# Database defaults
+db_connection: mysql
+db_host: "127.0.0.1"
+db_port: "3306"
